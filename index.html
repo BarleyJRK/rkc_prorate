@@ -779,28 +779,13 @@
                     </div>
 
                     <div class="form-group">
-                        <label>
-                            Activity
-                            <span class="tooltip-icon" data-tooltip="Start = service begins on this date. Stop = service ends on this date (stop date NOT included in billing).">?</span>
-                        </label>
-                        <div class="radio-group">
-                            <div class="radio-option">
-                                <input type="radio" id="startService" name="serviceType" value="start">
-                                <label for="startService">Start of Service</label>
-                            </div>
-                            <div class="radio-option">
-                                <input type="radio" id="stopService" name="serviceType" value="stop" checked>
-                                <label for="stopService">End of Service</label>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
                         <label for="serviceDate">
                             Effective Date
-                            <span class="tooltip-icon" data-tooltip="The date service starts or stops. For stops, this date is NOT included in the billing period.">?</span>
+                            <span class="tooltip-icon" data-tooltip="The date service ends. This date is NOT included in the billing period.">?</span>
                         </label>
                         <input type="date" id="serviceDate" required>
+                        <!-- Hidden field to always use "stop" service type -->
+                        <input type="hidden" name="serviceType" value="stop">
                     </div>
 
                     <div class="form-group">
@@ -1160,7 +1145,7 @@
 
             // Get form values
             const cycleType = document.getElementById('invoiceCycle').value;
-            const serviceType = document.querySelector('input[name="serviceType"]:checked').value;
+            const serviceType = document.querySelector('input[name="serviceType"]').value;
             const serviceDateInput = document.getElementById('serviceDate').value;
             const serviceRate = parseFloat(document.getElementById('serviceRate').value);
             const notes = document.getElementById('notes').value;
