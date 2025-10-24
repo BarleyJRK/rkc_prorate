@@ -302,6 +302,22 @@
             margin-bottom: 15px;
         }
 
+        .result-amount.credit {
+            color: var(--error-color);
+            background: linear-gradient(135deg, rgba(245, 101, 101, 0.1), rgba(245, 101, 101, 0.05));
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid var(--error-color);
+        }
+
+        .result-amount.no-adjustment {
+            color: var(--success-color);
+            background: linear-gradient(135deg, rgba(72, 187, 120, 0.1), rgba(72, 187, 120, 0.05));
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid var(--success-color);
+        }
+
         .result-message {
             font-size: 1rem;
             color: var(--text-secondary);
@@ -797,13 +813,20 @@
                     </div>
                 </div>
 
+                <!-- Billing Period Preview -->
+                <div id="periodPreview" style="display: none; background: var(--bg-secondary); border: 2px solid var(--accent-primary); border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+                    <div style="font-weight: 600; color: var(--accent-primary); margin-bottom: 8px;">📅 Billing Period Preview</div>
+                    <div id="periodPreviewContent" style="font-size: 0.875rem; color: var(--text-primary);"></div>
+                </div>
+
                 <div class="form-group">
                     <label for="notes">Notes</label>
                     <textarea id="notes" placeholder="Enter any notes or description..."></textarea>
                 </div>
 
-                <div style="margin-top: 20px;">
+                <div style="margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
                     <button type="submit" class="btn">Calculate Proration</button>
+                    <button type="button" class="btn btn-secondary" id="clearFormBtn">Clear Form</button>
                 </div>
 
                 <div class="error-message" id="errorMessage"></div>
@@ -829,10 +852,8 @@
                     <input type="text" class="search-box" id="logSearch" placeholder="🔍 Search logs...">
                     <select class="filter-select" id="logFilter">
                         <option value="all">All Entries</option>
-                        <option value="start">Start Only</option>
-                        <option value="stop">Stop Only</option>
                         <option value="credit">Credits Only</option>
-                        <option value="charge">Charges Only</option>
+                        <option value="no-adjustment">No Adjustment Only</option>
                     </select>
                     <button type="button" class="btn btn-secondary" id="clearLog">Clear Log</button>
                 </div>
@@ -1111,19 +1132,19 @@
             message += `<strong># of Unused Service Days:</strong> ${unusedDays} days<br><br>`;
 
             if (alreadyBilled) {
-                if (serviceType === 'stop') {
-                    const unusedAmount = fullPeriodCharge - proratedAmount;
-                    message += `<strong>Billing Status:</strong> The invoice for this period was issued on ${formatDate(billDate)}. `;
-                    message += `The customer was billed for the full period (${formatCurrency(fullPeriodCharge)}). `;
-                    message += `Since service ended on ${formatDate(serviceDate)}, <strong>credit ${formatCurrency(unusedAmount)}</strong> for the unused portion of the service period.`;
-                } else {
-                    message += `<strong>Billing Status:</strong> The invoice for this period was already issued on ${formatDate(billDate)}. `;
-                    message += `The customer has not been billed for service starting ${formatDate(serviceDate)}. `;
-                    message += `They should be charged <strong>${formatCurrency(proratedAmount)}</strong> for the remaining days of the period.`;
-                }
+                const unusedAmount = fullPeriodCharge - proratedAmount;
+                message += `<div style="background: rgba(245, 101, 101, 0.1); padding: 15px; border-left: 4px solid var(--error-color); border-radius: 6px; margin-top: 10px;">`;
+                message += `<strong>📋 Billing Status: ALREADY BILLED</strong><br>`;
+                message += `<strong>Bill Date:</strong> ${formatDate(billDate)}<br>`;
+                message += `<strong>Amount Billed:</strong> ${formatCurrency(fullPeriodCharge)} (full period)<br><br>`;
+                message += `<strong>⚠️ ACTION REQUIRED:</strong> Issue a credit of <strong style="color: var(--error-color);">${formatCurrency(unusedAmount)}</strong> to the customer's account for ${unusedDays} unused service days.`;
+                message += `</div>`;
             } else {
-                message += `<strong>Billing Status:</strong> The invoice for this period (scheduled for ${formatDate(billDate)}) has not been generated yet. `;
-                message += `No separate adjustment needed – the next bill will include the prorated charge of <strong>${formatCurrency(proratedAmount)}</strong>.`;
+                message += `<div style="background: rgba(72, 187, 120, 0.1); padding: 15px; border-left: 4px solid var(--success-color); border-radius: 6px; margin-top: 10px;">`;
+                message += `<strong>📋 Billing Status: NOT YET BILLED</strong><br>`;
+                message += `<strong>Scheduled Bill Date:</strong> ${formatDate(billDate)}<br><br>`;
+                message += `<strong>✅ NO ACTION REQUIRED:</strong> The upcoming bill will automatically include the correct prorated amount of <strong style="color: var(--success-color);">${formatCurrency(proratedAmount)}</strong> for ${activeDays} days of service.`;
+                message += `</div>`;
             }
 
             return message;
@@ -1193,12 +1214,12 @@
                 }
             }
 
-            // Warn if date is in the future (more than 1 day)
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            tomorrow.setHours(0, 0, 0, 0);
-            if (serviceDate > tomorrow) {
-                if (!confirm('Warning: This date is in the future. Do you want to continue?')) {
+            // Warn if date is more than 90 days in the future
+            const ninetyDaysFromNow = new Date();
+            ninetyDaysFromNow.setDate(ninetyDaysFromNow.getDate() + 90);
+            ninetyDaysFromNow.setHours(0, 0, 0, 0);
+            if (serviceDate > ninetyDaysFromNow) {
+                if (!confirm('Notice: This end date is more than 90 days in the future. This is unusual for scheduled service disconnections. Do you want to continue?')) {
                     return;
                 }
             }
@@ -1209,18 +1230,18 @@
                 const message = generateResultMessage(result, cycleType, serviceType, serviceDate);
 
                 // Display results
+                // Clear any previous classes
+                resultAmount.className = 'result-amount';
+
                 if (result.alreadyBilled) {
-                    // Already billed - adjustment needed
-                    if (serviceType === 'stop') {
-                        const unusedAmount = result.fullPeriodCharge - result.proratedAmount;
-                        resultAmount.textContent = formatCurrency(unusedAmount) + ' (Credit)';
-                    } else {
-                        // Start after billing - need to charge
-                        resultAmount.textContent = formatCurrency(result.proratedAmount) + ' (Charge)';
-                    }
+                    // Already billed - credit needed
+                    const unusedAmount = result.fullPeriodCharge - result.proratedAmount;
+                    resultAmount.textContent = '💳 CREDIT: ' + formatCurrency(unusedAmount);
+                    resultAmount.classList.add('credit');
                 } else {
-                    // Not yet billed - no separate adjustment needed
-                    resultAmount.textContent = 'No Adjustment Needed';
+                    // Not yet billed - no adjustment needed
+                    resultAmount.textContent = '✅ NO ADJUSTMENT NEEDED';
+                    resultAmount.classList.add('no-adjustment');
                 }
 
                 resultMessage.innerHTML = message;
@@ -1546,10 +1567,8 @@
 
                 // Apply type filter
                 if (filterType !== 'all') {
-                    if (filterType === 'start' && entry.serviceType !== 'start') return false;
-                    if (filterType === 'stop' && entry.serviceType !== 'stop') return false;
-                    if (filterType === 'credit' && (!entry.alreadyBilled || entry.serviceType !== 'stop')) return false;
-                    if (filterType === 'charge' && (!entry.alreadyBilled || entry.serviceType !== 'start')) return false;
+                    if (filterType === 'credit' && !entry.alreadyBilled) return false;
+                    if (filterType === 'no-adjustment' && entry.alreadyBilled) return false;
                 }
 
                 return true;
@@ -1608,6 +1627,16 @@
             }
         });
 
+        // Clear form button
+        document.getElementById('clearFormBtn').addEventListener('click', () => {
+            document.getElementById('prorationForm').reset();
+            resultContainer.classList.remove('show');
+            errorMessage.classList.remove('show');
+            document.getElementById('calculationBreakdown').classList.remove('show');
+            document.getElementById('showBreakdownBtn').textContent = 'Show Calculation Details';
+            document.getElementById('periodPreview').style.display = 'none';
+        });
+
         // Search and filter event listeners
         document.getElementById('logSearch').addEventListener('input', (e) => {
             const searchTerm = e.target.value;
@@ -1638,7 +1667,6 @@
             // Calculate statistics
             let totalCalculations = log.length;
             let totalCredits = 0;
-            let totalCharges = 0;
             let noAdjustmentCount = 0;
             let commercialCount = 0;
             let residentialCount = 0;
@@ -1646,10 +1674,8 @@
             log.forEach(entry => {
                 const fullPeriodCharge = entry.fullPeriodCharge || (entry.monthlyRate * 3) || 0;
 
-                if (entry.alreadyBilled && entry.serviceType === 'stop') {
+                if (entry.alreadyBilled) {
                     totalCredits += (fullPeriodCharge - entry.proratedAmount);
-                } else if (entry.alreadyBilled && entry.serviceType === 'start') {
-                    totalCharges += entry.proratedAmount;
                 } else {
                     noAdjustmentCount++;
                 }
@@ -1669,15 +1695,11 @@
                 </div>
                 <div class="stat-card">
                     <div class="stat-value" style="color: var(--error-color);">${formatCurrency(totalCredits)}</div>
-                    <div class="stat-label">Total Credits</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" style="color: var(--success-color);">${formatCurrency(totalCharges)}</div>
-                    <div class="stat-label">Total Charges</div>
+                    <div class="stat-label">Total Credits Issued</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-value">${noAdjustmentCount}</div>
-                    <div class="stat-label">No Adjustment</div>
+                    <div class="stat-label">No Adjustment Needed</div>
                 </div>
             `;
 
@@ -1742,13 +1764,55 @@
         setInterval(updateClock, 1000);
         updateClock(); // Initial update
 
+        // Billing Period Preview
+        function updatePeriodPreview() {
+            const cycleType = document.getElementById('invoiceCycle').value;
+            const serviceDateInput = document.getElementById('serviceDate').value;
+            const periodPreview = document.getElementById('periodPreview');
+            const periodPreviewContent = document.getElementById('periodPreviewContent');
+
+            if (!cycleType || !serviceDateInput) {
+                periodPreview.style.display = 'none';
+                return;
+            }
+
+            try {
+                const serviceDate = new Date(serviceDateInput + 'T00:00:00');
+                if (isNaN(serviceDate.getTime())) {
+                    periodPreview.style.display = 'none';
+                    return;
+                }
+
+                const cycle = billingCycles[cycleType];
+                const period = cycle.getPeriod(serviceDate);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const alreadyBilled = today >= period.billDate;
+
+                let previewHTML = `
+                    <strong>Period:</strong> ${formatDate(period.periodStart)} to ${formatDate(period.periodEnd)}<br>
+                    <strong>Bill Date:</strong> ${formatDate(period.billDate)}<br>
+                    <strong>Status:</strong> ${alreadyBilled ? '<span style="color: var(--error-color);">⚠️ Already Billed - Credit will be needed</span>' : '<span style="color: var(--success-color);">✅ Not Yet Billed - No adjustment needed</span>'}
+                `;
+
+                periodPreviewContent.innerHTML = previewHTML;
+                periodPreview.style.display = 'block';
+            } catch (error) {
+                periodPreview.style.display = 'none';
+            }
+        }
+
+        // Add event listeners for preview
+        document.getElementById('invoiceCycle').addEventListener('change', updatePeriodPreview);
+        document.getElementById('serviceDate').addEventListener('change', updatePeriodPreview);
+
         // Initialize
         initTheme();
         renderAuditLog();
     </script>
 
     <footer style="text-align: center; padding: 20px 0; margin-top: 40px; border-top: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.75rem;">
-        <div style="margin-bottom: 5px;">Version 1.0</div>
+        <div style="margin-bottom: 5px;">Version 1.1</div>
         <div>
             <a href="https://recology001.sharepoint.com/sites/KnowledgeBase/SitePages/AMCS-Platform-Reference.aspx?web=1"
                target="_blank"
